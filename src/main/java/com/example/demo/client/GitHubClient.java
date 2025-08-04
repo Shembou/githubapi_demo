@@ -10,7 +10,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
@@ -22,30 +22,28 @@ public class GitHubClient {
     @Value("${GITHUB_TOKEN:}")
     private String githubToken;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestClient restClient;
 
     public List<GitHubRepositoryResponse> getUserRepositories(String username) {
         try {
-            ResponseEntity<List<GitHubRepositoryResponse>> response = restTemplate.exchange(
-                    "https://api.github.com/users/" + username + "/repos",
-                    HttpMethod.GET,
-                    new HttpEntity<>(createHeaders()),
-                    new ParameterizedTypeReference<List<GitHubRepositoryResponse>>() {
+            return restClient.get()
+                    .uri("https://api.github.com/users/{username}/repos", username)
+                    .headers(headers -> headers.addAll(createHeaders()))
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<GitHubRepositoryResponse>>() {
                     });
-            return response.getBody();
         } catch (HttpClientErrorException.NotFound e) {
             throw new UserNotFoundException("User not found");
         }
     }
 
     public List<GitHubBranchResponse> getRepositoryBranches(String owner, String repo) {
-        ResponseEntity<List<GitHubBranchResponse>> response = restTemplate.exchange(
-                "https://api.github.com/repos/" + owner + "/" + repo + "/branches",
-                HttpMethod.GET,
-                new HttpEntity<>(createHeaders()),
-                new ParameterizedTypeReference<List<GitHubBranchResponse>>() {
+        return restClient.get()
+                .uri("https://api.github.com/repos/{owner}/{repo}/branches", owner, repo)
+                .headers(headers -> headers.addAll(createHeaders()))
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<GitHubBranchResponse>>() {
                 });
-        return response.getBody();
     }
 
     private HttpHeaders createHeaders() {
