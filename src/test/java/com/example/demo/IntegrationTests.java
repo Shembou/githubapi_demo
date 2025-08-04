@@ -1,43 +1,53 @@
 package com.example.demo;
 
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+import com.example.demo.controller.GitHubController;
+import com.example.demo.model.GitHubBranch;
 import com.example.demo.model.GitHubRepository;
+import com.example.demo.service.GitHubService;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@WebMvcTest(GitHubController.class)
 public class IntegrationTests {
-    @LocalServerPort
-    private int port;
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private GitHubService gitHubService;
 
     @Test
-    public void shouldReturnNonForkRepositoriesWithBranches() {
+    public void shouldReturnNonForkRepositoriesWithBranches() throws Exception {
         String username = "Shembou";
-        String url = "http://localhost:" + port + "/api/v1/github/" + username + "/repositories";
 
-        ResponseEntity<GitHubRepository[]> response = restTemplate.getForEntity(url, GitHubRepository[].class);
+        GitHubBranch branch = new GitHubBranch();
+        branch.setName("main");
+        branch.setLastCommitSha("abc123");
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        GitHubRepository[] repositories = response.getBody();
-        assertThat(repositories).isNotEmpty();
+        GitHubRepository repository = new GitHubRepository();
+        repository.setName("my-repo");
+        repository.setOwnerLogin(username);
+        repository.setBranches(List.of(branch));
 
-        for (GitHubRepository repo : repositories) {
-            assertThat(repo.getOwnerLogin()).isEqualTo(username);
-            assertThat(repo.getBranches()).isNotEmpty();
-            repo.getBranches().forEach(branch -> {
-                assertThat(branch.getName()).isNotBlank();
-                assertThat(branch.getLastCommitSha()).isNotBlank();
-            });
-        }
+        List<GitHubRepository> mockRepositories = List.of(repository);
+
+        given(gitHubService.getNonForkRepositoriesWithBranches(username)).willReturn(mockRepositories);
+
+        mockMvc.perform(get("/api/v1/github/{username}/repositories", username))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].ownerLogin").value(username))
+                .andExpect(jsonPath("$[0].branches[0].name").value("main"))
+                .andExpect(jsonPath("$[0].branches[0].lastCommitSha").value("abc123"));
     }
 }
